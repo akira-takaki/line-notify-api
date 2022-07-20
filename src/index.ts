@@ -24,6 +24,9 @@ app.use(
   })
 );
 
+// サービスを提供しているサイトのプロトコル(http or https)とホスト名(ポート番号を含む)
+const protocolHost = process.env.PROTOCOL_HOST || "http://localhost:8080";
+
 // LINE Notify にサービスを登録した際に発行された Client ID
 const clientId = process.env.CLIENT_ID || "line-notify-api";
 
@@ -49,13 +52,7 @@ app.get("/auth/line-notify", (req: Request, res: Response) => {
   const responseType = "code";
 
   // redirect_uri
-  const host = req.get("host");
-  if (host === undefined) {
-    console.log("host is undefined.");
-    res.status(500).send();
-    return;
-  }
-  const redirectUri = `${req.protocol}://${host}/auth/line-notify/callback`;
+  const redirectUri = `${protocolHost}/auth/line-notify/callback`;
 
   // scope
   const scope = "notify";
@@ -106,13 +103,7 @@ app.post(
       const grantType = "authorization_code";
 
       // redirect_uri
-      const host = req.get("host");
-      if (host === undefined) {
-        console.log("host is undefined.");
-        res.status(500).send();
-        return;
-      }
-      const redirectUri = `${req.protocol}://${host}/auth/line-notify/callback`;
+      const redirectUri = `${protocolHost}/auth/line-notify/callback`;
 
       const uri = oauth2TokenEndpointUri;
       console.log(uri);
