@@ -5,6 +5,9 @@ import session from "express-session";
 
 import axios from "axios";
 
+// LINE Notify API Document
+// https://notify-bot.line.me/doc/ja/
+
 interface CallbackRequestBody {
   code: string;
   state: string;
@@ -25,6 +28,7 @@ app.use(
 );
 
 // サービスを提供しているサイトのプロトコル(http or https)とホスト名(ポート番号を含む)
+// Callback URL は LINE Notify から見える URL なので Cloud Run で動作するものを設定すること。
 const protocolHost = process.env.PROTOCOL_HOST || "http://localhost:8080";
 
 // LINE Notify にサービスを登録した際に発行された Client ID
@@ -43,10 +47,12 @@ const oauth2TokenEndpointUri = "https://notify-bot.line.me/oauth/token";
 // 通知系 : アクセストークンに関連付けられたユーザ、またはグループに対して通知を送信する
 const sendNotifyUri = "https://notify-api.line.me/api/notify";
 
-// アクセストークン
+// 認証した結果得られたアクセストークン
 let accessToken = "";
 
-// 認証を開始する
+/*
+ * 認証を開始する
+ */
 app.get("/auth/line-notify", (req: Request, res: Response) => {
   // response_type
   const responseType = "code";
@@ -76,8 +82,10 @@ app.get("/auth/line-notify", (req: Request, res: Response) => {
   res.redirect(uri);
 });
 
-// 認証の LINE Notify からのリダイレクト先
-// LINE Notify にサービスを登録した際に設定した Callback URL
+/*
+ * 認証の LINE Notify からのリダイレクト先
+ * LINE Notify にサービスを登録した際に設定した Callback URL
+ */
 app.post(
   "/auth/line-notify/callback",
   (
@@ -86,6 +94,7 @@ app.post(
   ) => {
     console.log(req.originalUrl);
     if (req.originalUrl !== "/auth/line-notify/callback") {
+      // セキュリティ チェック
       res.status(401).send("Bad originalUrl");
       return;
     }
@@ -93,11 +102,14 @@ app.post(
     console.log(req.session.id);
     console.dir(req.body, { depth: null });
     if (req.session.id !== req.body.state) {
+      // セキュリティ チェック
       res.status(401).send("Bad state");
       return;
     }
 
-    // access token を取得
+    /*
+     * access token を取得
+     */
     (async (): Promise<void> => {
       // grant_type
       const grantType = "authorization_code";
@@ -122,6 +134,8 @@ app.post(
             "Content-Type": "application/x-www-form-urlencoded",
           },
         });
+
+        // 取得したアクセストークンはユーザIDと紐付けて管理する
         console.log("get token OK");
         console.log(response.data.access_token);
         accessToken = response.data.access_token;
@@ -140,9 +154,12 @@ app.post(
   }
 );
 
-// アクセストークンに関連付けられたユーザ、またはグループに対して通知を送信する
+/*
+ * アクセストークンに関連付けられたユーザ、またはグループに対して通知を送信する
+ */
 app.get("/notify", (req: Request, res: Response) => {
   if (accessToken === "") {
+    // すでに取得したアクセストークンがあれば環境変数に設定すればそれを使う
     accessToken = process.env.ACCESS_TOKEN || "";
   }
   if (accessToken === "") {
@@ -153,14 +170,20 @@ app.get("/notify", (req: Request, res: Response) => {
   // message
   let message = req.query.msg;
   if (message === undefined) {
+    // queryで指定がなければ「お知らせ」を送信する
     message = "お知らせ";
   }
 
   const uri = sendNotifyUri;
   console.log(uri);
 
+  // リクエストパラメータ
+  // ※この例は一番シンプルなもの
   const form = `message=${message.toString()}`;
 
+  /*
+   * LINE Notify の通知を送信
+   */
   (async (): Promise<void> => {
     try {
       const response = await axios.post<{ status: number }>(uri, form, {
